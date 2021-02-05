@@ -1,17 +1,19 @@
 ---
-title: "People_Analytics"
+title: "People Analytics"
 author: "Joe Cristian"
 date: "2/3/2021"
 output: 
- html_document:
-   toc: true
-   toc_float: true
-   df_print: paged
-   highlight: zenburn
-   theme: flatly
-   toc_depth: 3
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: 
+        collapsed: false
+    number_sections: true
+    theme: flatly
+    highlight: zenburn
+    df_print: paged
+    css: img/style.css
 ---
-
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
@@ -23,7 +25,7 @@ The following coursebook is produced by the team at Algoritma for BRI Data Hacka
 
 Algoritma is a data science education center based in Jakarta. We organize workshops and training programs to help working professionals and students gain mastery in various data science sub-fields: data visualization, machine learning, data modeling, statistical inference, etc.
 
-```{r,echo=TRUE}
+```{r,echo=FALSE}
 knitr::include_graphics("img/pa_banner.png")
 ```
 
@@ -35,16 +37,18 @@ Algoritma is a data science education center based in Jakarta. We organize works
 
 # Background {.tabset}
 ## Case Objective
-People analytics, especially in Human Resource Management area, is revolutionising the way human resources departments operate, leading to higher efficiency and better results overall. Human resources has been using analytics for years. However, the collection, processing and analysis of data has been largely manual, and given the nature of human resources dynamics and HR KPIs, the approach has been constraining HR. Therefore, it is surprising that HR departments woke up to the utility of machine learning so late in the game. In this opportunity, we're going to do predictive analytics and also intepreting its ML model.
+People analytics, especially in Human Resource Management area, is revolutionising the way human resources departments operate, leading to higher efficiency and better results overall[^1]. Human resources has been using analytics for years. However, the collection, processing and analysis of data has been largely manual, and given the nature of human resources dynamics and HR KPIs, the approach has been constraining HR. Therefore, it is surprising that HR departments woke up to the utility of machine learning so late in the game. In this opportunity, we're going to do predictive analytics and also intepreting its ML model.
 
 The data is taken from [Kaggle](https://www.kaggle.com/davidepolizzi/hr-data-set-based-on-human-resources-data-set). It's a synthetic data inspired from [this data](https://www.kaggle.com/rhuebner/human-resources-data-set) which has often been used to perform people analytics for Human Resource Management students at the college. Note the data is from fictitious company but the variable and the cases are identical to those in real companies. 
 We're going to identifying which employees are most likely will leave the company so the HR will have enough time to do precautionary measure. Our analysis will be their first signal, so the company needs your help in doing such analysis with accurate and interpretable methods.
 
 ## Training Objective
+This workshop cover most of data science workflow to explore, predict, and interpreting classification cases in human resource area. We'll be focus on interpret the business application rather than the math algorithm for every model. 
+
 - Tabular Data Preparation:
    - Data Importing
    - Data preprocessing/wrangling
-   - EDA and data vizualization
+   - EDA and data visualization
 - ML modeling with tidymodel:
    - Easy modeling with tidymodel
    - try several classification algorithm
@@ -52,10 +56,19 @@ We're going to identifying which employees are most likely will leave the compan
 - Model Evaluation:
    - train test split
    - confusion matrix
+   - Interpreting ML algorithm with LIME
    
    
 ## Library
-Load this package in your R. If you don't have any, please install the package using `install.packages()` function
+Load this package in your R. If you don't have any, please run the chunk below
+
+```{r,eval=FALSE}
+packages <- c("tidyverse","lubridate","ggplot2","plotly","FactoMineR","factoextra",
+              "tidytext","rsample","caret","tidymodels","ranger","lime")
+install.packages(packages)
+```
+
+
 ```{r,warning=FALSE,message=FALSE}
 library(tidyverse) # Data Wrangling
 library(lubridate) # Date type data
@@ -67,20 +80,21 @@ library(tidytext) # additional data wrangling
 library(rsample) # data sampling
 library(caret) # ML modeling
 library(tidymodels) # ML modeling
-library(ranger)
+library(ranger) # Random Forest
 library(lime) # ML model intepretation
 ```
 
 # Let's Begin
 ## Data Import
-Our data stored in .txt format. R provides lots of method to import various kind of data format, for example csv, xlsx, or json. R also have packages that allows importing from various type of databases. In our case, the data in txt are seperated by 'tab'. Sometimes is a good idea to look at your data by manually open it to see how it structured so we can import it easily. I use `read.table()` function to import the data (though its not the only function to import txt) with "tab" as custom separator, header TRUE to tells the function that the data already has column name and put NA to empty cells with fill parameter. 
+Our data stored in .txt format. R provides lots of method to import various kind of data format like csv, xlsx, or json. R also have packages that allows importing from various type of databases[^2]. In our case, the data in txt are separated by 'tab'. Sometimes is a good idea to look at your data by manually open it to see how it structured so we can import it easily. I use `read.table()` function to import the data (though its not the only function to import txt) with "tab" as custom separator, header TRUE to tells the function that the data already has column name and put NA to empty cells with fill parameter. 
 
 ```{r}
 hrd <- read.table("data_input/HR DATA.txt",sep = "\t",header = T,fill = T)
 head(hrd)
 ```
-Here some data dictionary i collected from the original sources:
-- `Employee Name`: Employee’s full name   
+Here some data dictionary i collected from the original sources:    
+
+- `Employee Name`: Employee’s full name     
 - `EmpID` : Employee ID is unique to each employee    
 - `MarriedID` : Is the person married (1 or 0 for yes or no)   
 - `MaritalStatusID`: Marital status code that matches the text field MaritalDesc   
@@ -145,7 +159,8 @@ Now there's no duplicated name. We also know that there are redundant variables 
 
 ```{r}
 hrd <- hrd %>% 
-  select(-c(EmpID,Zip,MarriedID,EmpID,MaritalStatusID,GenderID,EmpStatusID,DeptID,PerfScoreID,ManagerID,Original.DS,PositionID,DaysLateLast30))
+  select(-c(EmpID,Zip,MarriedID,EmpID,MaritalStatusID,GenderID,EmpStatusID,
+            DeptID,PerfScoreID,ManagerID,Original.DS,PositionID,DaysLateLast30))
 
 head(hrd)
 ```
@@ -166,9 +181,9 @@ hrd <- hrd %>%
 head(hrd)
 ```
 
-Everything looks fine except `DOB`. That colomn shows employees' date of birth so its impossible that someone was born above 2021. `dmy()` function assume year "64" is 2064 instead 1964. Sadly there's no parameter or option to change it to our desire, we need to fix it in the hard way.
+Everything looks fine except `DOB`. That column shows employees' date of birth so its impossible that someone was born above 2021. `dmy()` function assume year "64" is 2064 instead 1964. Sadly there's no parameter or option to change it to our desire, we need to fix it in the hard way.
 
-That's one of the challange in data cleaning proess. Sometimes we need to make our hand dirty by using weird code or workaround. In our case, first, i will seperate the date component (year, month, day) by its separator then add "19" to the year (example: 64 -> 1964) then recombined everything and return it as date type
+That's one of the challenge in data cleaning process Sometimes we need to make our hand dirty by using weird code or workaround. In our case, first, i will separate the date component (year, month, day) by its separator then add "19" to the year (example: 64 -> 1964) then recombined everything and return it as date type
 
 ```{r}
 # DOB in our data has become Date type, we can't change it to character directly. 
@@ -252,20 +267,26 @@ You may have an idea to do more feature engineering. Don't be afraid to do it, I
 Exploratory Data Analysis (EDA) is an important step that often forgotten. We can do EDA to know more about our data and make the first hypothesis for our prediction objective. There are lot of things to do in EDA step. FYI, there is even job specialized to do this step, namely: "Data Analyst" or "Business Intelligence". Because there's too many stuff we can do, i'll provide some interesting question and we will try to answer it by wrangling the data.
 
 *Interesting question:*
-- Is there any extreme data or outlier among all numeric variables?
+
+- Is there any extreme data or outlier among all numeric variables?    
 - Is there any correlation between who a person works for and their performance score?    
-- Is there any inequality in the company based on its pay rate? are there some departments that are paid more? 
-- Which variable we need to consider to prevent employee attrition?
+- Is there any inequality in the company based on its pay rate? are there some departments that are paid more?     
 
 ### Is there any extreme data or outlier among all numeric variables?
-We can easily find outlier by drawing boxplot. Outlier is an extreme data that, statistically, is more or less than 1.5 IQR. Lets draw boxplot for every numeric variabels
+```{r,echo=FALSE}
+knitr::include_graphics("img/boxplot.png")
+```
+
+We can easily find outlier by drawing boxplot. Outlier is an extreme data that, statistically, is more or less than 1.5 IQR. Lets draw boxplot for every numeric variables
 ```{r}
 hrd_clean %>% 
-  select_if(is.numeric) %>% 
-  pivot_longer(cols = c(names(.))) %>% 
-  ggplot(aes(y = value)) +
-  geom_boxplot() +
-  facet_wrap(~name,scales = "free_y")
+   select_if(is.numeric) %>% 
+   pivot_longer(cols = c(names(.))) %>% 
+   ggplot(aes(y = value)) +
+   geom_boxplot(aes(fill = name),show.legend = F) +
+   scale_fill_brewer(palette = "RdGy") +
+   facet_wrap(~name,scales = "free_y") +
+   theme_minimal()
 ```
 From the plot above we know that `age`, `DayAfterReview`,`SpecialProjectsCount` and `WorkingDay` have some outlier. We also can find that using biplot. Biplot help us visualize lots of numeric variables into two dimensions. Each axis are represented by PC. PC or Principal Componets is the summarization of every scaled numeric variables. Each variabels has different contribution to each PC. In short, PCA help us to reduce dimensionality by summarise numeric variables.
 
@@ -284,7 +305,7 @@ By only using 3 PC, we already covers 60% variance of actual data. Let's draw so
 plot.PCA(pca,choix = "ind",invisible = "quali",select = "contrib10",habillage = 4)
 ```
 
-Even tough its kinda messy, we found 10 employee name that are considered as outliers. But remember this plot only represent approximately 44% variance of the actual data. In which variabel those employee are considered as outlier? let's see how the variabels contribute to each PC
+Even tough its kinda messy, we found 10 employee name that are considered as outliers. But remember this plot only represent approximately 44% variance of the actual data. In which variabel those employee are considered as outlier? let's see how the variables contribute to each PC
 
 ```{r}
 plot.PCA(pca,choix = "var")
@@ -292,18 +313,18 @@ plot.PCA(pca,choix = "var")
 
 PC 1 or Dimension 1 is mostly contributed by `PayRate` and `SpecialProjectsCount`. Dim 2 is contributed by the other. From both plot, if the observation is placed to the most right, they have high `PayRate` and `SpecialProjectsCount`. If they placed to the most bottom, they have high `EngagementSurvey` and `age` but low `EmpSatisfaction` and `WorkingDay`. The 10 outliers is *maybe* has high value in `SpecialProjectsCount`, `age,` and `WorkingDay`. This statement is just the same as what we found using boxplot in previous result.
 
-```{r}
-fviz_pca_biplot(pca,habillage = 4,invisible = "quali",label = "var")
+```{r,message=FALSE,warning=FALSE}
+fviz_pca_biplot(pca,habillage = 4,invisible = "quali",label = "var",)
 ```
 
 There are lots of information we can take from the biplot above. But take it with a grain of salt because its only summarize numeric value and only covered 44% of variance. Here some insight we can take:
-- PC1 is highly contributed by `PayRate` and `SpecialProjectsCount.` PC2 by `EmpSatisfaction`, `WorkingDay`, `age`, and `EngagementSurvey`     
-- `PayRate` and `SpecialProjectsCount` has high positive correlation
-- `EngagementSurvey` and `EmpSatisfaction` has high negative correlation
-- There is only slight different of contribution between `PayRate` and `SpecialProjectsCount` to PC1
-- `age` and `EmpSatisfaction` has more contribution to PC2 than `WorkingDay` and `EngagementSurvey`
-- Low `PayRate` and `SpecialProjectsCount` may affect the employee attrition 
 
+- PC1 is highly contributed by `PayRate` and `SpecialProjectsCount.` PC2 by `EmpSatisfaction`, `WorkingDay`, `age`, and `EngagementSurvey`     
+- `PayRate` and `SpecialProjectsCount` has high positive correlation    
+- `EngagementSurvey` and `EmpSatisfaction` has high negative correlation    
+- There is only slight different of contribution between `PayRate` and `SpecialProjectsCount` to PC1  
+- `age` and `EmpSatisfaction` has more contribution to PC2 than `WorkingDay` and `EngagementSurvey`   
+- Low `PayRate` and `SpecialProjectsCount` may affect the employee attrition    
 
 
 ### Is there any correlation between who a person works for and their performance score?  
@@ -316,8 +337,8 @@ chisq.test(hrd_clean$ManagerName,hrd_clean$PerformanceScore)
 
 To interpret the output, we first need to determine the null and alternative hypothesis
 
-H0 = there is no relationship between Manager and employee perfomance score
-H1 = There is a relationship bertween manager and employee perfornamce score
+H0 = there is no relationship between Manager and employee performance score   
+H1 = There is a relationship bertween manager and employee performance score   
 
 From the output we know that p-value is less than the alpha (we use the most common alpha, 0.95), thus we need to reject the null hypthesis (H0) and we conclude that **There is a significant relationship bertween manager and employee perfornamce score**. We know that both column is associated to each other. 
 
@@ -331,24 +352,25 @@ hrd_clean <- hrd_clean %>%
    droplevels()
 
 table(hrd_clean$ManagerName,hrd_clean$PerformanceScore) %>% 
-  as.data.frame() %>% 
-  mutate(Var1 = reorder_within(Var1,by = Freq,within = Var2)) %>% 
-  ggplot(aes(x = Freq, y = Var1)) +
-  geom_col(aes(fill = Var2)) +
-  facet_wrap(~Var2,scales = "free") +
-  scale_y_reordered() +
+   as.data.frame() %>% 
+   mutate(Var1 = reorder_within(Var1,by = Freq,within = Var2)) %>% 
+   ggplot(aes(x = Freq, y = Var1)) +
+   geom_col(aes(fill = Var2)) +
+   scale_fill_brewer(palette = "RdGy") +
+   facet_wrap(~Var2,scales = "free") +
+   scale_y_reordered() +
    labs(title = "Employee Performance by Manager",
         subtitle = "Who have the Best Employee?",
         x = "Frequency", y = "Manager Name") +
-  theme_minimal() +
-  theme(legend.position = "none") 
+   theme_minimal() +
+   theme(legend.position = "none") 
 ```
 
 The plot above show frequency of employee that have specific performance score by each manager. "Exceeds" is the best level performance and "PIP" is the lowest. We know that Brannon Miller is the best manager because he has the highest number of great employee, in contrast, John Smith is the worst. 
 
 But is this plot enough to tell what is happening between employee and its manager relation to their performance score? I think its not. Maybe Brannon Miller has so many employee that if we calcluate by frequency he looks as the best. 
 
-```{r}
+```{r,message=FALSE,warning=FALSE}
 # showing the number of rows per manager
 hrd_clean %>% 
    group_by(ManagerName) %>% 
@@ -358,7 +380,7 @@ hrd_clean %>%
 
 Is now clear that Brannon Miller has lot of employee under its name compared to most manager. Let's wrangle the data to see the percentage of best employee by the total of employee from each manager.
 
-```{r}
+```{r,message=FALSE,warning=FALSE}
 manager_perf <- table(hrd_clean$ManagerName,hrd_clean$PerformanceScore) %>% 
   as.data.frame() %>% 
   pivot_wider(names_from = "Var2",values_from = "Freq") %>% 
@@ -372,37 +394,39 @@ The table above is the result of our aggregation. Now we have the information ab
 
 ```{r}
 manager_perf %>% 
-  select(c(Var1,Exceeds,perc_exceed)) %>% 
-  pivot_longer(cols = c(Exceeds,perc_exceed)) %>% 
-  ggplot(aes(x = value, y = reorder(Var1,value))) +
-  geom_col(aes(fill = name),show.legend = F) +
-  facet_wrap(~name,scales = "free_x") +
-  labs(title = "Best Employee Performance by Manager",
-       subtitle = "Frequency and Percentage",
-       x = "Value", y = "Manager Name") +
-  theme_minimal()
+   select(c(Var1,Exceeds,perc_exceed)) %>% 
+   pivot_longer(cols = c(Exceeds,perc_exceed)) %>% 
+   ggplot(aes(x = value, y = reorder(Var1,value))) +
+   geom_col(aes(fill = name),show.legend = F) +
+   scale_fill_manual(values = c("#bf0808","#3b3b3b")) +
+   facet_wrap(~name,scales = "free_x") +
+   labs(title = "Best Employee Performance by Manager",
+        subtitle = "Frequency and Percentage",
+        x = "Value", y = "Manager Name") +
+   theme_minimal()
 ```
 
 Now is true that Brannon Miller is the best Manager because not only by frequency of high performanced employee, but also by percentage. More than 30% of his employee has high performance. But we also know that Amy Dunn, the second best, is not actually the second best. Alex Sweetwater is better than her by percentage of their employee. With this type of information we can draw a correct conclussion because the calculation is balanced. Is important to share information that is the most true, rather than we 'want'.
 
 ```{r}
 manager_perf %>% 
-  select(c(Var1,PIP,perc_pip)) %>% 
-  pivot_longer(cols = c(PIP,perc_pip)) %>% 
-  ggplot(aes(x = value, y = reorder(Var1,value))) +
-  geom_col(aes(fill = name),show.legend = F) +
-  facet_wrap(~name,scales = "free_x") +
-  labs(title = "Worst Employee Performance by Manager",
-       subtitle = "Frequency and Percentage",
-       x = "Value", y = "Manager Name") +
-  theme_minimal()
+   select(c(Var1,PIP,perc_pip)) %>% 
+   pivot_longer(cols = c(PIP,perc_pip)) %>% 
+   ggplot(aes(x = value, y = reorder(Var1,value))) +
+   geom_col(aes(fill = name),show.legend = F) +
+   scale_fill_manual(values = c("#bf0808","#3b3b3b")) +
+   facet_wrap(~name,scales = "free_x") +
+   labs(title = "Worst Employee Performance by Manager",
+        subtitle = "Frequency and Percentage",
+        x = "Value", y = "Manager Name") +
+   theme_minimal()
 ```
 
 Well its true that John Smith has the lowest performance employee, both by frequency or percentage. Kissy sulivan however is the second best in both good and bad performance employee. Based on this founding the HR team can develop some action to improve the employe performance but also considering the manager influence.
 
 
 ### Is there any inequality in the company based on its pay rate? are there some departments that are paid more? 
-```{r,message=FALSE}
+```{r,message=FALSE,warning=FALSE}
 hrd_clean %>% 
   group_by(Department) %>% 
   summarise(avg_PayRate = mean(PayRate),
@@ -420,6 +444,7 @@ hrd_clean %>%
    select(PayRate,Department,WorkingDay) %>% 
    ggplot(aes(x = WorkingDay, y = PayRate)) +
    geom_point(aes(col = WorkingDay),show.legend = F) +
+   scale_color_continuous(low = "#3b3b3b",high = "#bf0808") +
    facet_wrap(~Department) +
    labs(title = "PayRate and WorkingDay Correlation",
         subtitle = "by each department") +
@@ -429,7 +454,7 @@ hrd_clean %>%
 
 Its a common knowledge that the longer employee work in same company, the higher the salary. But from the plot above, for every department, there is no correlation between `WorkingDay` and `PayRate`. 
 
-```{r}
+```{r,warning=FALSE,message=FALSE}
 GGally::ggcorr(hrd_clean %>% 
                  select_if(is.numeric),label = T,legend.position = "none")
 ```
@@ -442,7 +467,7 @@ cor.test(hrd_clean$PayRate,hrd_clean$SpecialProjectsCount)
 
 The `cor.test()` function is a statistical method to not only calculate the correlation, but also determine if it the variabel is significanly correlated to each other. The p-value is below the alpha (0.05), same like chi-square test, we failed to reject the null hypothesis. Thus we know that the variable is significanly correlated to each other and worth to analyze further. Let's see which department has the most `SpecialProjectsCount`. 
 
-```{r,message=FALSE}
+```{r,message=FALSE,warning=FALSE}
 hrd_clean %>% 
   group_by(Department) %>% 
   summarise(total = sum(SpecialProjectsCount),
@@ -537,7 +562,7 @@ conf_dt
 Confusion matrix show us a lot of stuff. In the most common way to decide if the model is good enough is to look at the accuracy. we have 68.5% accuracy, is it good enough? Is accuracy the only important metrics in classification? To understand this lets take a short break to learn about confusion matrix
 
 ### confusion matrix
-```{r,echo=TRUE}
+```{r,echo=FALSE}
 knitr::include_graphics("img/rvp.PNG")
 ```
 
@@ -550,7 +575,7 @@ Confusion matrix consist in 4 parts:
 
 Recall and precision is most common metrics beside accuracy that take FP or FN into account. They consider the weight of FP or FN and have interesting intepretation depends on the case
 
-```{r,echo=TRUE}
+```{r,echo=FALSE}
 knitr::include_graphics("img/rvp2.png")
 ```
 
@@ -606,16 +631,20 @@ data.frame(accuracy = c(conf_dt$overall[1],conf_rf$overall[1],conf_xgb$overall[1
 ```
 
 # Model Tuning
-The model evaluation is quite good already. But we can always maximize the result by doing hyperparameter tuning. In short, hyperparameter tuning is choosing a set of optimal hyperparameters for a learning algorithm. We will provde set of value to every model' parameter and fit the model. We will take parameter value from the best fitting model. Since Decision Tree result is way lower than Random Forest or XGBoost, we will not tune the model and focusong only to the best 2.
+The model evaluation is quite good already. But we can always maximize the result by doing hyperparameter tuning. In short, hyperparameter tuning is choosing a set of optimal hyperparameter for a learning algorithm. We will provide set of value to every model' parameter and fit the model. We will take parameter value from the best fitting model. Since Decision Tree result is way lower than Random Forest or XGBoost, we will not tune the model and focusing only to the best 2.
 
 set k-fold cross validation
+```{r,echo=FALSE}
+knitr::include_graphics("img/kfold.png")
+```
+
 ```{r}
 set.seed(123)
 folds <- vfold_cv(train_down,5,strata = "Termd")
 ```
 
 ## Random Forest
-we will tune the `mtry` and `trees` parameter using grid tuning. this process will take a lot of time because it will train all possible paramter combination and extract the best result. we will aim the highest recall and ROC as our best model.
+we will tune the `mtry` and `trees` parameter using grid tuning. this process will take a lot of time because it will train all possible parameter combination and extract the best result. we will aim the highest recall and ROC as our best model.
 ```{r}
 # trees and mtry grid combination 
 rf.grid <- expand.grid(trees = seq(500,700,50), mtry = 4:8)
@@ -637,7 +666,7 @@ rf.wf <- workflow() %>%
 ```
 
 
-```{r}
+```{r,warning=FALSE,message=FALSE}
 rf.tune <- readRDS("model/rf_tune.rds")
 show_best(rf.tune,metric = "recall")
 ```
@@ -667,7 +696,7 @@ cbind(rf_pred_2,rf_pred_class2,test$Termd) %>%
 
 The plot above shows ROC. The ROC itself doesn't have any value, its just portayed the tradeoff between sensitivity and 1-specificity if we change the treshold. A good ROC give curves closer to the top-left corner. 
 
-```{r}
+```{r,message=FALSE,warning=FALSE}
 cbind(rf_pred_2,rf_pred_class2,test$Termd) %>% 
    setNames(c("prob_0","prob_1","pred_class","truth")) %>% 
    roc_auc(truth, prob_0)
@@ -692,7 +721,7 @@ xg.wf <- workflow() %>%
 ```
 
 
-```{r}
+```{r,message=FALSE,warning=FALSE}
 xg.tune <- readRDS("model/xg_tune.rds")
 show_best(xg.tune,metric = "recall")
 ```
@@ -750,6 +779,7 @@ Intuitively, you can check the importance of each variable from the model based 
 tidy(rf_best$fit$fit$fit$variable.importance) %>% 
    ggplot(aes(x = x, y = reorder(names,x))) +
    geom_col(aes(fill = x),show.legend = F) +
+   scale_fill_continuous(low = "#3b3b3b",high = "#bf0808") +
    labs(title  = "Random Forest Variable Importance",
         x = "",y = "") +
    theme_minimal()
@@ -789,7 +819,7 @@ plot_features(explanation,ncol = 1)
 
 We will take 2 observation for the example. The plot above is showing how our every variable take effect in prediction process based on our model. The text label:0 shows what value of target  variable is being explained. The Probability shows the probability of the observation belong to the label "0" (not resign). The color of each bar represent whether the features support or contradict if the observations labeled as "0".
 
-The intepretation is quite simple, in observation one (left plot) "Position = Area Sales Manager" has the biggest weight to support the attrition to be 0 (not resign). This mean that employee who has such a position is most likely to stay in the company. in contrast, age <=27 contradict the likelihood to not resign. means the younger the employee tends to leave the company
+The intepretation is quite simple, in observation one (left plot) "Position = Area Sales Manager" has the biggest weight to support the attrition to be 0 (not resign). This mean that employee who has such a position is most likely to stay in the company. in contrast, SpecialProjectCouts <=2 contradict the likelihood to not resign. means the younger the employee tends to leave the company
 
 The next element is Explanation Fit. These values indicate how good LIME explain the model. Here we see the Explanation Fit for first observation is 63%. But its only 28% for observation 2, which can be interpreted that LIME can only explain a little about our model. You may consider not to trust the LIME output since it only has low Explanation Fit.
 
@@ -797,13 +827,22 @@ There are lots of intepretation we can take from the LIME plot above. Remember w
 
 
 # Reference
-- https://www.tidymodels.org/find/parsnip/
-- https://en.wikipedia.org/wiki/Hyperparameter_optimization
-- https://rpubs.com/David21/Tidymodels
-- https://algotech.netlify.app/blog/interpreting-classification-model-with-lime/
+
+- [Tidymodels](https://www.tidymodels.org/find/parsnip/)
+- [Hyperparameter Tuning](https://en.wikipedia.org/wiki/Hyperparameter_optimization)
+- [Tidymodels flow](https://rpubs.com/David21/Tidymodels)
+- [LIME for Model Interpretation](https://algotech.netlify.app/blog/interpreting-classification-model-with-lime/)
+
+Publication:
+
+- [Github Repo](https://github.com/western11/People-Analytics)
+- [Rpubs](https://rpubs.com/jojoecp/People_Analytics)
 
 
+Annotations
 
+[^1]: [AI in HR Area](https://hrexecutive.com/how-ai-tech-and-virtual-reality-can-help-boost-employee-experience/)    
+[^2]: [DB Connections (1.5)](https://askalgo.netlify.app/)    
 
 
 

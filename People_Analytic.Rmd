@@ -81,6 +81,7 @@ library(rsample) # data sampling
 library(caret) # ML modeling
 library(tidymodels) # ML modeling
 library(ranger) # Random Forest
+library(xgboost) # XGBoost
 library(lime) # ML model intepretation
 ```
 
@@ -128,12 +129,7 @@ Here some data dictionary i collected from the original sources:
 - `SpecialProjectsCount` : The number of special projects that the employee worked on during the last 6 months   
 - `LastPerformanceReviewDate` : The most recent date of the person’s last performance review.   
 - `DaysLateLast30` : The number of times that the employee was late to work during the last 30 days   
-- `Original.DS` : Whether the observation is from oroginal dataset or synthetic    
-
-```{r}
-glimpse(hrd)
-```
-
+- `Original.DS` : Whether the observation is from original dataset or synthetic    
 
 ## Data Cleaning
 The data is undoubtedly messy. It has redundant information, wrong data type, and posibbly the presence of missing value or outlier. The most common step in data wrangling is to change data type and remove redundant variables. For example, we have `Employee_Name` and `EmpID` which tell us a same information. I prefer to use `Employee_Name` to identify our rows. Thus we need to remove the `EmpID` column. But before that we need to make sure every value in `Employee_Name` in unique.
@@ -264,7 +260,7 @@ We can use the new column to sharpen our analysis. Remember when i say we fill N
 You may have an idea to do more feature engineering. Don't be afraid to do it, It may improve our analysis and prediction. Feel free to tell me if you have one!
 
 ## Exploratory Data Analysis
-Exploratory Data Analysis (EDA) is an important step that often forgotten. We can do EDA to know more about our data and make the first hypothesis for our prediction objective. There are lot of things to do in EDA step. FYI, there is even job specialized to do this step, namely: "Data Analyst" or "Business Intelligence". Because there's too many stuff we can do, i'll provide some interesting question and we will try to answer it by wrangling the data.
+Exploratory Data Analysis (EDA) is an important step that often forgotten. It isn't wise to put all variables as predictor directly by just holding one statistics test, like correlation, as justification to determine that the variables is good for predicting[^3].We can do EDA to know more about our data and make the first hypothesis for our prediction objective. There are lot of things to do in EDA step, data visualization is one of the most important[^4]. FYI, there is even job specialized to do this step, namely: "Data Analyst" or "Business Intelligence". Because there's too many stuff we can do, i'll provide some interesting question and we will try to answer it by wrangling the data.
 
 *Interesting question:*
 
@@ -301,7 +297,8 @@ summary(pca)
 ```
 
 By only using 3 PC, we already covers 60% variance of actual data. Let's draw some biplot
-```{r}
+```{r,fig.width=9}
+options(ggrepel.max.overlaps = Inf) 
 plot.PCA(pca,choix = "ind",invisible = "quali",select = "contrib10",habillage = 4)
 ```
 
@@ -368,7 +365,7 @@ table(hrd_clean$ManagerName,hrd_clean$PerformanceScore) %>%
 
 The plot above show frequency of employee that have specific performance score by each manager. "Exceeds" is the best level performance and "PIP" is the lowest. We know that Brannon Miller is the best manager because he has the highest number of great employee, in contrast, John Smith is the worst. 
 
-But is this plot enough to tell what is happening between employee and its manager relation to their performance score? I think its not. Maybe Brannon Miller has so many employee that if we calcluate by frequency he looks as the best. 
+But is this plot enough to tell what is happening between employee and its manager relation to their performance score? I think its not. Maybe Brannon Miller has so many employee that if we calculate by frequency he looks as the best. 
 
 ```{r,message=FALSE,warning=FALSE}
 # showing the number of rows per manager
@@ -480,7 +477,7 @@ IT/IS department has the most `SpecialProjectsCount`, every employee in that dep
 
 
 # Modeling
-We've done a lot of EDA. Now it's time to build prediction model. In this part we will build some model with different algorithm like Decision Tree, Random Forest, XGBoost and Support Vactor Machine and pick one of the best. Even though we will be using lots of algorithm, the code itself is not complicated. `Tidymodels` package will help us to build model with same workflow. We only need to change 1 or 2 function based on the model. 
+We've done a lot of EDA. Now it's time to build prediction model. In this part we will build some model with different algorithm like Decision Tree, Random Forest, and XGBoost and pick one of the best. Even though we will be using lots of algorithm, the code itself is not complicated. `Tidymodels` package will help us to build model with same workflow. We only need to change 1 or 2 function based on the model. 
 
 Our data has a lot of variables, 27 in total. Not all variabels are important to use in modeling step. We can remove some by identifying which variables has low variance, or subjectively select the variables
 
@@ -551,7 +548,7 @@ pred_dt <- predict(mod_dt,test,type = "prob")
 head(data.frame(pred_dt))
 ```
 
-Notice that i set the output predict as probability rather than class. We can always change the treshold to decide which class the prediction results in. For now, we will use 0.5 as the common trehsold standard
+Notice that i set the output predict as probability rather than class. We can always change the threshold to decide which class the prediction results in. For now, we will use 0.5 as the common threshold standard
 
 ```{r}
 pred_dt_class <- as.factor(ifelse(pred_dt[,1] > 0.5,0,1))
@@ -562,6 +559,7 @@ conf_dt
 Confusion matrix show us a lot of stuff. In the most common way to decide if the model is good enough is to look at the accuracy. we have 68.5% accuracy, is it good enough? Is accuracy the only important metrics in classification? To understand this lets take a short break to learn about confusion matrix
 
 ### confusion matrix
+Confusion matrix gives you the difference of classification results by the actual value. There are some metrics that can be calculated from confusion matrix with each of them has its own interpretation and can be used differently depending on the case[^5]
 ```{r,echo=FALSE}
 knitr::include_graphics("img/rvp.PNG")
 ```
@@ -581,8 +579,22 @@ knitr::include_graphics("img/rvp2.png")
 
 The image above show some example of the case. In our case, is important to know which employee is likely to resign as far as we can so the HR department can do some action to prevent that. The cost if employees are resign is higher than if we do some precautionary action. Thus, **it is okay if we do the action to employee who doesn't want to resign but predicted to resign rather than actually missed someone who will resign before we do the action**. In confusion matrix terms, it simply means we need to avoid high False Negative (when employees are predicted to not resign, but actually does). In summary, we want high Recall value
 
+### Optional: `cmplot()` for classification threshold
+One of Algoritma mentor have created a package to create confusion matrix graph for Optimizing Probability Thresholds. Install the package from github then run the `confmat_plot()` function
+```{r,eval=FALSE}
+devtools::install_github("ahmadhusain/cmplot")
+```
+
+```{r,message=FALSE,warning=FALSE}
+cmplot::confmat_plot(prob = pred_dt[,1],
+             ref = test$Termd,
+             postarget = "0",
+             negtarget = "1")
+```
+
+
 ## Random Forest
-Now we will focus on recall metrics. Our previous decision tree model has 85.4% recall (Pos Pred Value). In the next model we want to look at higher recall. 
+Now we will focus on recall metrics. Our previous decision tree model has 85.4% recall (sensitivity). In the next model we want to look at higher recall. 
 
 ```{r}
 # mod_rf <- rand_forest(mode = "classification") %>% 
@@ -600,12 +612,12 @@ conf_rf <- confusionMatrix(pred_rf_class,test$Termd,positive = "0")
 conf_rf
 ```
 
-Random Forest recall is better than decision tree. It have 93.4% recall and 82.4% accuracy. We can improve this later in model tuning part. For now lets try another algorithm
+Random Forest recall is better than decision tree. It have 85.4% recall and 87.2% accuracy. We can improve this later in model tuning part. For now lets try another algorithm
 
 ## Xgboost
-```{r}
-# mod_xgb <- boost_tree(mode = "classification") %>% 
-#   set_engine("xgboost") %>% 
+```{r,warning=FALSE}
+# mod_xgb <- boost_tree(mode = "classification") %>%
+#   set_engine("xgboost") %>%
 #   fit(Termd~., data = train_down)
 
 mod_xgb <- readRDS("model/mod_xgb.rds")
@@ -619,13 +631,13 @@ conf_xgb <- confusionMatrix(pred_xgb_class,test$Termd,positive = "0")
 conf_xgb
 ```
 
-Even tough XGboost is the evolution of Random Forest, apparently, the result is not better than random forest. XGBoost has 80% accuracy and 91% recall. 
+Even tough XGboost is the evolution of Random Forest, apparently, the result is not better than random forest. XGBoost has 80% accuracy and 77.3% recall. 
 
 lets draw a table and conclude our modeling result
 
 ```{r}
 data.frame(accuracy = c(conf_dt$overall[1],conf_rf$overall[1],conf_xgb$overall[1]),
-           recall = c(conf_dt$byClass[3],conf_rf$byClass[3],conf_xgb$byClass[3])) %>% 
+           recall = c(conf_dt$byClass[1],conf_rf$byClass[1],conf_xgb$byClass[1])) %>% 
    `rownames<-`(c("Decision Tree","Random Forest","XGBoost")) %>% 
    arrange(-recall)
 ```
@@ -684,7 +696,7 @@ conf_rf_2 <- confusionMatrix(rf_pred_class2,test$Termd)
 conf_rf_2
 ```
 
-Voila! now we have recal 97.2% recall and 91% accuracy, its better than default Random Forest model we make earlier. Previously, i said that confusion matrix is just a game of deciding treshold. If we want to lower FN, the FP will raise. There is another metrics that calculate the goodnes of model for every classification treshold, its called Receiver Operating Characteristic (ROC) and Area Under ROC Curve (AUC). 
+Voila! now we have recal 89.6% recall and 91% accuracy, its better than default Random Forest model we make earlier. Previously, i said that confusion matrix is just a game of deciding treshold. If we want to lower FN, the FP will raise. There is another metrics that calculate the goodnes of model for every classification treshold, its called Receiver Operating Characteristic (ROC) and Area Under ROC Curve (AUC). 
 
 
 ```{r}
@@ -728,7 +740,7 @@ show_best(xg.tune,metric = "recall")
 
 The best XGBooost model is created with 8 mtry, 700 trees and 0.1 learn_rate. we will use it as our main XGBoost model
 
-```{r}
+```{r,warning=FALSE}
 xg_best <- xg.wf %>% 
   finalize_workflow(select_best(xg.tune,"recall")) %>% 
   fit(train_down)
@@ -757,15 +769,15 @@ cbind(xg_pred_2,xg_pred_class2,test$Termd) %>%
    roc_auc(truth, prob_0)
 ```
 
-We have 0.94 AUC. it is true that in our case, Random Forest perform better than XGBoost. The Data Science team can develop this model to be used by HR Department to do the prediction. 
+We have 0.92 AUC. it is true that in our case, Random Forest perform better than XGBoost. The Data Science team can develop this model to be used by HR Department to do the prediction. 
 
 Let's summarise all the evaluation result
 
 ```{r}
 data.frame(accuracy = c(conf_dt$overall[1],conf_rf$overall[1],conf_xgb$overall[1],
                         conf_rf_2$overall[1],conf_xg_2$overall[1]),
-           recall = c(conf_dt$byClass[3],conf_rf$byClass[3],conf_xgb$byClass[3],
-                      conf_rf_2$byClass[3],conf_xg_2$byClass[3])) %>% 
+           recall = c(conf_dt$byClass[1],conf_rf$byClass[1],conf_xgb$byClass[1],
+                      conf_rf_2$byClass[1],conf_xg_2$byClass[1])) %>% 
    `rownames<-`(c("Decision Tree","Random Forest","XGBoost","RF Tuned","XGB Tuned")) %>% 
    arrange(-recall)
 
@@ -806,7 +818,8 @@ explainer <- lime(x = train_down %>% select(-Termd),
 ```
 
 ```{r,fig.width=8,fig.height=9.6}
-explanation <- explain(x = test %>% select(-Termd) %>% slice(1:2),
+set.seed(123)
+explanation <- explain(x = test %>% select(-Termd) %>% dplyr::slice(1:2),
                        labels = "0",
                        n_permutations = 500,
                        dist_fun = "manhattan",
@@ -819,11 +832,11 @@ plot_features(explanation,ncol = 1)
 
 We will take 2 observation for the example. The plot above is showing how our every variable take effect in prediction process based on our model. The text label:0 shows what value of target  variable is being explained. The Probability shows the probability of the observation belong to the label "0" (not resign). The color of each bar represent whether the features support or contradict if the observations labeled as "0".
 
-The intepretation is quite simple, in observation one (left plot) "Position = Area Sales Manager" has the biggest weight to support the attrition to be 0 (not resign). This mean that employee who has such a position is most likely to stay in the company. in contrast, SpecialProjectCouts <=2 contradict the likelihood to not resign. means the younger the employee tends to leave the company
+The intepretation is quite simple, in observation one (left plot) "Position = Area Sales Manager" has the biggest weight to support the attrition to be 0 (not resign). This mean that employee who has such a position is most likely to stay in the company. in contrast, SpecialProjectCouts <=2 contradict the likelihood to not resign. means the less an employee was tasked with SpecialProjectsCounts, they tend to leave the company.
 
-The next element is Explanation Fit. These values indicate how good LIME explain the model. Here we see the Explanation Fit for first observation is 63%. But its only 28% for observation 2, which can be interpreted that LIME can only explain a little about our model. You may consider not to trust the LIME output since it only has low Explanation Fit.
+The next element is Explanation Fit. These values indicate how good LIME explain the model. Here we see the Explanation Fit for first observation is 57%. But its only 36% for observation 2, which can be interpreted that LIME can only explain a little about our model. You may consider not to trust the LIME output since it only has low Explanation Fit.
 
-There are lots of intepretation we can take from the LIME plot above. Remember we only take 2 prediciton as example to try LIME interpreation. If you want more insight among different type of employee, you can always add more observation to the explaner. We as a data science team now have a justification to defend our model output. Its also can give the HRD team some insight why employee tends leave or stay in the company.
+There are lots of interpretation we can take from the LIME plot above. Remember we only take 2 predicition as example to try LIME interpretation If you want more insight among different type of employee, you can always add more observation to the explainer. We as a data science team now have a justification to defend our model output. Its also can give the HRD team some insight why employee tends leave or stay in the company.
 
 
 # Reference
@@ -843,6 +856,9 @@ Annotations
 
 [^1]: [AI in HR Area](https://hrexecutive.com/how-ai-tech-and-virtual-reality-can-help-boost-employee-experience/)    
 [^2]: [DB Connections (1.5)](https://askalgo.netlify.app/)    
+[^3]:Yanai, I., Lercher, M. A hypothesis is a liability. [Genome Biol 21, 231 (2020). ](https://doi.org/10.1186/s13059-020-02133-w)
+[^4]: [Importance of dataviz](https://github.com/lockedata/datasauRus)
+[^5]: [Confusion Matrix](https://medium.com/@ksnugroho/confusion-matrix-untuk-evaluasi-model-pada-unsupervised-machine-learning-bc4b1ae9ae3f)
 
 
 

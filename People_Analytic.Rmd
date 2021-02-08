@@ -21,10 +21,6 @@ knitr::opts_chunk$set(echo = TRUE,
 options(scipen = 999)
 ```
 
-The following coursebook is produced by the team at Algoritma for BRI Data Hackathon 2021 Workshop: People Analytics. The coursebook is intended for a restricted audience only, i.e. the individuals having received this coursebook directly from the training organization. It may not be reproduced, distributed, translated or adapted in any form outside these individuals and organizations without permission.
-
-Algoritma is a data science education center based in Jakarta. We organize workshops and training programs to help working professionals and students gain mastery in various data science sub-fields: data visualization, machine learning, data modeling, statistical inference, etc.
-
 ```{r,echo=FALSE}
 knitr::include_graphics("img/pa_banner.png")
 ```
@@ -32,7 +28,6 @@ knitr::include_graphics("img/pa_banner.png")
 The following coursebook is produced by the team at Algoritma for BRI Data Hackathon 2021 Workshop: People Analytics. The coursebook is intended for a restricted audience only, i.e. the individuals having received this coursebook directly from the training organization. It may not be reproduced, distributed, translated or adapted in any form outside these individuals and organizations without permission.
 
 Algoritma is a data science education center based in Jakarta. We organize workshops and training programs to help working professionals and students gain mastery in various data science sub-fields: data visualization, machine learning, data modeling, statistical inference, etc.
-
 
 
 # Background {.tabset}
@@ -473,7 +468,7 @@ hrd_clean %>%
 
 ```
 
-IT/IS department has the most `SpecialProjectsCount`, every employee in that department has 5 `SpecialProjectsCount` in average. We can assume that people in IT/IS department is most likely get higher `payRate` **because** they recieve more Special Projects. Sales, however, has low average of special projects but they have the highest of `payRate` median.
+IT/IS department has the most `SpecialProjectsCount`, every employee in that department has 5 `SpecialProjectsCount` in average. We can assume that people in IT/IS department is most likely get higher `payRate` **because** they receive more Special Projects. Sales, however, has low average of special projects but they have the highest of `payRate` median.
 
 
 # Modeling
@@ -845,6 +840,9 @@ There are lots of interpretation we can take from the LIME plot above. Remember 
 - [Hyperparameter Tuning](https://en.wikipedia.org/wiki/Hyperparameter_optimization)
 - [Tidymodels flow](https://rpubs.com/David21/Tidymodels)
 - [LIME for Model Interpretation](https://algotech.netlify.app/blog/interpreting-classification-model-with-lime/)
+- [The evolution of XGBoost](https://towardsdatascience.com/https-medium-com-vishalmorde-xgboost-algorithm-long-she-may-rein-edd9f99be63d)
+- [AI usage in HR](https://www.forbes.com/sites/tomdavenport/2019/02/10/ai-and-hr-a-match-made-in-many-companies/?sh=133aac823cd3)
+- [Deloitte Survey: State of AI in the Enterprise](https://www2.deloitte.com/content/dam/insights/us/articles/4780_State-of-AI-in-the-enterprise/DI_State-of-AI-in-the-enterprise-2nd-ed.pdf)
 
 Publication:
 
